@@ -3,7 +3,6 @@ import Anthropic from "@anthropic-ai/sdk";
 export const maxDuration = 60;
 
 const SERPER_API_KEY = process.env.SERPER_API_KEY!;
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
 
 // ─── Types ───────────────────────────────────────────────
 interface SerperResult {
@@ -78,8 +77,8 @@ async function fetchContent(url: string): Promise<string> {
 }
 
 // ─── Claude Zusammenfassung ──────────────────────────────
-async function summarize(query: string, threads: Thread[]): Promise<string> {
-  const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+async function summarize(query: string, threads: Thread[], apiKey: string): Promise<string> {
+  const client = new Anthropic({ apiKey });
 
   const context = threads
     .filter(t => t.content.length > 150)
@@ -127,9 +126,13 @@ Struktur:
 
 // ─── POST Handler (Streaming) ────────────────────────────
 export async function POST(req: Request) {
-  const { query } = await req.json();
+  const { query, apiKey } = await req.json();
   if (!query?.trim()) {
     return new Response(JSON.stringify({ error: "Kein Suchbegriff" }), { status: 400 });
+  }
+  const claudeKey = apiKey || process.env.ANTHROPIC_API_KEY || "";
+  if (!claudeKey) {
+    return new Response(JSON.stringify({ error: "Kein Claude API Key – bitte in den Einstellungen eintragen." }), { status: 400 });
   }
 
   const encoder = new TextEncoder();
@@ -154,7 +157,7 @@ export async function POST(req: Request) {
         send("status", `🤖 ${withContent} Seiten geladen – KI analysiert…`);
 
         // 3. Zusammenfassung
-        const summaryHtml = await summarize(query.trim(), loaded);
+        const summaryHtml = await summarize(query.trim(), loaded, claudeKey);
 
         // 4. Ergebnis senden
         send("result", {
